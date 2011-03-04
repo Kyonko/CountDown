@@ -16,6 +16,37 @@ local cd = countdown
 cd.VERSION = "1.0.0"
 --[#] = {time_of_death_notification|false}
 cd.turrets = {}
+--[[--------------------------Interp/Comm Functions-------------------------]]--
+function cd.ReadGroupMsg(msg) 
+	tNum = msg:match("Turret %d+")
+	--We have at least tNum turrets. Let's make sure our table reflects that
+	for i=1, tNum do
+		if(not cd.turrets[i]) then
+			cd.turrets[i] = false
+		end
+	end
+	--And bam, let's start our countdown
+	cd.turrets[tNum] = GetGameTime()
+end
+
+function cd.GenRequestIter(group_players)
+	return cd.GenRequestMsg, group_players, nil
+end
+
+function cd.GenRequestMsg(group_players, position)
+	name, position = next(group_players, position)
+
+	if not name then return nil end
+
+	local rqst_msg = "#countdown#Rqst: %s":format(name)
+	return rqst_msg, position
+end
+	
+		
+--function cd.RequestMsgReply()
+--	msg = "#countdown#Rply: %s":
+
+--[[----------------------------Update Functions----------------------------]]--
 --Length of respawn timer in seconds.
 cd.respawn_time = 900
 
@@ -39,18 +70,37 @@ end
 cd.last_text_index = 1
 function cd.scrolling_text(text, num_chars)
 	--Reduce num_chars so we don't go overboard and overflow our area
-	num_chars = math.floor(num_chars * .9)
-	print(cd.last_text_index)
-	local first_half = text:sub(cd.last_text_index, (cd.last_text_index-1) + num_chars)
-	local fh_len = first_half:len()
+	num_chars = math.floor(num_chars * .98)
+
+	--Return if we fit in scroll area
+	if(text:len() <= num_chars) then return text. false end
 	
-	cd.last_text_index = (cd.last_text_index < text:len() and (cd.last_text_index + 1)) or 1
-	if(num_chars == fh_len) then return first_half end
-	
-	--Else greater
-	local rem = num_chars - fh_len
-	local second_half = text:sub(1, num_chars - fh_len)
-	return string.format("%s %s", first_half, second_half)
+	--Scroll otherwise!
+	local scrolly = string.format("%s // %s", text, text):sub(cd.last_test_index, cd.last_test_index-1 + num_chars)
+	cd.last_text_index = (cd.last_text_index < (text:len()+4) and (cd.last_text_index + 1)) or 1
+	return scrolly, true
+end
+
+--Make sure to debug prior to use
+--Check with VOClock for proper use of timers
+local function set_updates_to_scroll_speed()
+	cd.scrollspeed = true 
+	cd.updatetimer.Kill()
+	cd.updatetimer = Timer()
+	cd.updatetimer.SetTimeout(250, function () 
+						cd.UpdateTimers
+						cd.updatetimer.SetTimeout(250)
+					end)
+end
+
+local function set_updates_to_normal_speed()
+	cd.scrollspeed = false
+	cd.updatetimer.Kill()
+	cd.updatetimer = Timer()
+	cd.updatetimer.SetTimeout(500, function () 
+						cd.UpdateTimers
+						cd.turrets.updatetimer.SetTimeout(500)
+					end)
 end
 
 function cd.UpdateTimers()
@@ -77,17 +127,47 @@ function cd.UpdateTimers()
 		end
 	end
 	--Divide xsize by four to get average number of spaces for :words:
-	cd.timers.title = cd.scrolling_text(table.concat(timertext, " "), cd.timers.title:gsub("x%d+", "")/4)
+	cd.timers.title, warp_speed_scrolling = cd.scrolling_text(table.concat(timertext, " "), cd.timers.title:gsub("x%d+", "")/4)
+
+	--Make sure our speeds are proper. Speeds may need tweaking.
+	if(warp_speed_scrolling and not cd.scrollspeed) then set_updates_to_scroll_speed()
+	elseif(cd.scrollspeed and not warp_speed_scrolling) then set_updates_to_normal_speed() end
 end
 
-cd.timers = iup.label{title = "", expand = "HORIZONTAL", alignment = "ACENTER"}
-cd.ticker = iup.vbox { 
-	iup.fill{}, 
-	iup.hbox { 
-		cd.timers,
-		expand = "HORIZONTAL",
+function cd.init() 
+	cd.timers = iup.label{title = "", expand = "HORIZONTAL", alignment = "ACENTER"}
+	cd.ticker = iup.vbox { 
+		iup.fill{}, 
+		iup.hbox { 
+			cd.timers,
+			expand = "HORIZONTAL",
+		}
 	}
-}
 	
 
-iup.Append(HUD.pluginlayer, cd.ticker)
+	iup.Append(HUD.pluginlayer, cd.ticker)
+	
+	if(cd.updatetimer) then 
+		cd.updatetimer.Kill()
+		cd.updatetimer = nil
+	end
+	cd.updatetimer = Timer()
+	cd.updatetimer.SetTimeout(500, function() 
+						cd.UpdateTimers
+						cd.turrets.updatetimer.SetTimeout(500)
+					end)
+	RegisterUserEvent(init, "rHUDxscale")
+end
+
+function cd.exit()
+	if(cd.updatetimer) then 
+		cd.updatetimer.Kill()
+		cd.updatetimer = nil
+	end
+	--Is it UnRegisterEvent?
+	UnRegisterEvent(init, "rHUDxscale")
+end
+
+RegisterUserEvent(cd.init, "PLAYER_ENTERED_GAME")
+RegisterUserEvent(cd.exit, "PLAYER_LOGGED_OUT")
+
