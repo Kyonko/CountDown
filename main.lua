@@ -11,13 +11,12 @@ awareness about timers and the like.
 --]]
 
 --This is already loaded or will clash with something, don't load
---if(pcall(loadstring("return countdown"))) then return end
-declare("countdown", {})
+declare("turret_countdown", {})
 
 --Bind to local variable to make name-changing easier if needed
-local cd = countdown
+local cd = turret_countdown
 local active = false
-cd.VERSION = "1.0.0"
+cd.VERSION = "1.0.1"
 --[#] = {time_of_death_notification|false}
 cd.turrets = {}
 --[[--------------------------Interp/Comm Functions-------------------------]]--
@@ -33,13 +32,7 @@ function cd.ReadGroupMsg(e, msg)
 		end
 	end
 	--And bam, let's start our countdown
-	console_print(e)
-	table.insert(cd.turrets, gkmisc.GetGameTime())
-	--Turn ourselves on and request and update if we see a turret explode
-	if not active then 
-		active = true 
-		cd.onGroupJoin()
-	end
+	if tNum ~= 0 then table.insert(cd.turrets, gkmisc.GetGameTime()) end
 end
 
 RegisterEvent(cd.ReadGroupMsg, "CHAT_MSG_DEATH") --local
@@ -69,7 +62,16 @@ function cd.ParseReqMsgReply(msg)
 	return {unpack(msg:match("{.+}"))}
 end
 
+cd.PDAChatLog = {}
+cd.StationChatLog = {}
+cd.CapShipChatLog = {}
 function cd.HideCountDownMsgs()
+	--Fuck it. Remove the next line if you have figured out how to hide this shit 
+	--from the PDA, Station, and CapShip chats. 
+	--The below doesn't work, ffffuu
+	if(true) then return end
+	
+	
 	--Okay, now hide our message from the specific private.
 	_generalchatlog = GeneralChatPanel.log
 	local found, dex = false, #_generalchatlog
@@ -84,6 +86,12 @@ function cd.HideCountDownMsgs()
 	_generalchatlog.updated = false
 	GeneralChatPanel.log = _generalchatlog
 	GeneralChatPanel.chattext.value = table.concat(_generalchatlog, "\n")
+	cd.PDAChatLog.value = table.concat(_generalchatlog, "\n")
+	cd.StationChatLog.value = table.concat(_generalchatlog, "\n")
+	cd.CapShipChatLog.value = table.concat(_generalchatlog, "\n") 
+	iup.Refresh(PDAChatArea)
+	iup.Refresh(StationChatArea)
+	iup.Refresh(CapShipChatArea)
 	return found
 end
 
@@ -99,6 +107,8 @@ function cd.ProcessCountDownMsgs(e, info)
 		--Turn on and receive update if we see a reply to a request
 		active = true
 		needs_update = false
+		ProcessEvent("MSG_NOTIFICATION", "Turret data seen, CountDown turning on.")
+		
 		local loaded = loadstring(("return %s"):format(r_msg))
 		cd.turrets = loaded()
 		HUD:PrintSecondaryMsg(("Received conquerable turret status from group"))
@@ -108,8 +118,16 @@ end
 RegisterEvent(cd.ProcessCountDownMsgs, "CHAT_MSG_GROUP")
 local name_index = 1
 cd.jointimer = Timer()
+local show_msg = false
 function cd.onGroupJoin()
-	if not active then return end
+	cd.turrets = {}
+	if not active then 
+		if not show_msg then
+			HUD:PrintSecondaryMsg("CountDown is off. Use '/countdown on' to turn it on.")
+			show_msg = true
+		end
+		return 
+	end
 	needs_update = true
 	if (not IsGroupMember(GetCharacterID())) or not needs_update then 
 		name_index = 1
@@ -119,6 +137,11 @@ function cd.onGroupJoin()
 	local num_gmemb = GetNumGroupMembers()
 	if(name_index > num_gmemb) then name_index = 1 end
 	local name = GetPlayerName(GetGroupMemberID(name_index))
+	if(name == GetPlayerName(GetCharacterID())) then
+		--Don't need to ask ourselves
+		name_index = name_index + 1
+		name = GetPlayerName(GetGroupMemberID(name_index))
+	end
 	name_index = name_index + 1
 	
 	SendChat(cd.GenRequestMsg(name), "GROUP")
@@ -132,12 +155,22 @@ function cd.onGroupJoin()
 									end)
 end
 
+function cd.onGroupCreate()
+	if not active then 
+		HUD:PrintSecondaryMsg("CountDown is off. Use '/countdown on' to turn it on.")
+		return 
+	end
+	HUD:PrintSecondaryMsg("CountDown is currently turned on.")
+end
+
 function cd.onGroupLeave()
 	name_index = 1
 	needs_update = true
+	show_msg = true
 end
 
 RegisterEvent(cd.onGroupJoin, "GROUP_SELF_JOINED")
+RegisterEvent(cd.onGroupCreate, "GROUP_CREATED")
 --I forget if you automatically rejoin groups on login. This will set up for that
 RegisterEvent(cd.onGroupJoin, "PLAYER_ENTERED_GAME")
 RegisterEvent(cd.onGroupLeave, "GROUP_SELF_LEFT")
@@ -275,6 +308,8 @@ function cd.OverwriteCB()
 	cd.HideCountDownMsgs()
 end
 
+local gb = iup.GetBrother
+local gc = iup.GetNextChild
 function cd.init() 
 	cd.timers = iup.label{title = "", expand = "HORIZONTAL", alignment = "ACENTER"}
 	cd.ticker = iup.vbox { 
@@ -299,6 +334,11 @@ function cd.init()
 					end)
 	
 	active = gkini.ReadInt("countdown", "active", 0)==1
+	--Get our chatlogs. Hope updates don't break these locations
+	cd.PDAChatLog = gb(gc(gc(gb(gc(PDAChatArea)))))
+	cd.StationChatLog = gb(gc(gc(gb(gc(StationChatArea)))))
+	cd.CapShipChatLog = gb(gc(gc(gb(gc(CapShipChatArea)))))
+	
 	RegisterEvent(cd.OverwriteCB, "CHAT_MSG_GROUP")
 	RegisterEvent(cd.init, "rHUDxscale")
 end
@@ -310,8 +350,7 @@ function cd.exit()
 	end
 	
 	GeneralChatPanel.update_cb = cd.old_update_cb
-	--Is it UnRegisterEvent?
-	UnRegisterEvent(cd.init, "rHUDxscale")
+	UnregisterEvent(cd.init, "rHUDxscale")
 end
 
 RegisterEvent(cd.init, "PLAYER_ENTERED_GAME")
@@ -332,7 +371,7 @@ function cd.cli (_, input)
 	end
 	input[1] = input[1]:lower()
 	if(input[1] == "help") then
-		print("\127ffffffUsage: /countdown [on|off]\n\t\tCalling with zero arguments toggles on/off status")
+		print("\127ffffffUsage: /countdown [on|off|help]\n\t\tCalling with zero arguments toggles on/off status. Version " .. cd.VERSION)
 	elseif(input[1] == "off") then
 		print("\127ffffffCountDown turned off")
 		gkini.WriteInt("countdown", "active", 0)
