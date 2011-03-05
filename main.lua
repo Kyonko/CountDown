@@ -27,12 +27,19 @@ function cd.ReadGroupMsg(e, msg)
 	local tNum = tonumber(msg:match("destroyed .+Turret (%d+)") or 0)
 	--We have at least tNum turrets. Let's make sure our table reflects that
 	for i=1, (tNum-1) do
-		if(cd.turrets[i] ~= "none") then
-			table.insert(cd.turrets, "none")
+		if(not cd.turrets[i]) then
+			table.insert(cd.turrets, i, "none")
 		end
 	end
 	--And bam, let's start our countdown
-	if tNum ~= 0 then table.insert(cd.turrets, gkmisc.GetGameTime()) end
+	
+	if tNum ~= 0 then 
+		if(cd.turrets[tNum]) then 
+			cd.turrets[tNum] = gkmisc.GetGameTime() 
+			return
+		end
+		table.insert(cd.turrets, tNum, gkmisc.GetGameTime()) 
+	end
 end
 
 RegisterEvent(cd.ReadGroupMsg, "CHAT_MSG_DEATH") --local
@@ -289,7 +296,7 @@ function cd.UpdateTimers()
 	--Divide xsize by four to get average number of spaces for :words:
 	if not cd.timers.size then return end --Stuff isn't mapped yet, die.
 	local warp_speed_scrolling = false
-	cd.timers.title, warp_speed_scrolling = cd.scrolling_text(table.concat(timertext," "), 100) --tonumber(cd.timers.size:gsub("x%d+", ""))/4)
+	cd.timers.title, warp_speed_scrolling = cd.scrolling_text(table.concat(timertext," "), gkinterface.GetXResolution()*HUD_SCALE/7) --tonumber(cd.timers.size:gsub("x%d+", ""))/4)
 
 	--Make sure our speeds are proper. Speeds may need tweaking.
 	if(warp_speed_scrolling and not cd.scrollspeed) then set_updates_to_scroll_speed()
