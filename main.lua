@@ -10,13 +10,12 @@ This file is the entire plugin, I guess. It adds some new elements to the HUD to
 awareness about timers and the like.
 --]]
 
---This is already loaded or will clash with something, don't load
 declare("turret_countdown", {})
 
 --Bind to local variable to make name-changing easier if needed
 local cd = turret_countdown
 local active = false
-cd.VERSION = "1.0.1"
+cd.VERSION = "1.0.s"
 --[#] = {time_of_death_notification|false}
 cd.turrets = {}
 --[[--------------------------Interp/Comm Functions-------------------------]]--
