@@ -15,7 +15,7 @@ declare("turret_countdown", {})
 --Bind to local variable to make name-changing easier if needed
 local cd = turret_countdown
 local active = false
-cd.VERSION = "1.0.s"
+cd.VERSION = "1.0.3"
 --[#] = {time_of_death_notification|false}
 cd.turrets = {}
 --[[--------------------------Interp/Comm Functions-------------------------]]--
@@ -345,7 +345,7 @@ function cd.init()
 	cd.StationChatLog = gb(gc(gc(gb(gc(StationChatArea)))))
 	cd.CapShipChatLog = gb(gc(gc(gb(gc(CapShipChatArea)))))
 	
-	RegisterEvent(cd.OverwriteCB, "CHAT_MSG_GROUP")
+	--RegisterEvent(cd.OverwriteCB, "CHAT_MSG_GROUP")
 	RegisterEvent(cd.init, "rHUDxscale")
 end
 
